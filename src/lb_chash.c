@@ -327,7 +327,7 @@ unsigned int chash_random_jump_rehash(struct proxy *p, struct hashkey_info *hash
 {
 	if (!hash_info)
 	{
-		printf("[CHRJ]: Hash info is null.\n");
+		//printf("[CHRJ]: Hash info is null.\n");
 		exit(1);
 	} else {
 		unsigned long org_keylen = hash_info->len;
@@ -417,16 +417,16 @@ chrj_look_up:
 		org_srv = nsrv;
 	}
 
-	if (n_jump_attempt != 0 && fallback == 0 && nsrv_prv)
-	{  
-		printf("[CHRJ]: Jump attempt %u, nsrv: %s, nsrv_prv: %s.\n", n_jump_attempt, nsrv->id, nsrv_prv->id);
-	}
+	// if (n_jump_attempt != 0 && fallback == 0 && nsrv_prv)
+	// {  
+	// 	printf("[CHRJ]: Jump attempt %u, nsrv: %s, nsrv_prv: %s.\n", n_jump_attempt, nsrv->id, nsrv_prv->id);
+	// }
 
 	loop = 0;
 	while (nsrv == avoid || (p->lbprm.hash_balance_factor && !chash_server_is_eligible(nsrv))) {
 		if (p->lbprm.hash_balance_factor && !chash_server_is_eligible(nsrv) && n_jump_attempt < MAX_JUMP_ATTEMPTS && hash_info)
 		{
-			printf("[CHRJ]: nsrv: %s is full!\n", nsrv->id);
+			//printf("[CHRJ]: nsrv: %s is full!\n", nsrv->id);
 			nsrv_prv = nsrv_prv;
 			n_jump_attempt++; 
 			goto chrj_random_jump;
@@ -442,15 +442,15 @@ chrj_look_up:
 
  out:
 	HA_RWLOCK_RDUNLOCK(LBPRM_LOCK, &p->lbprm.lock);
-	if (fallback == 0 && n_jump_attempt > 0 && nsrv)
-	{
-		char *org_srv_id = org_srv == NULL ? "UNKNOWN" : org_srv->id;
-		printf("[CHRJ]: Random jump success on %u. attempt, org_srv: %s, nsrv: %s!\n", n_jump_attempt, org_srv_id, nsrv->id);
-	}
-	if (fallback == 1)
-	{
-		printf("[CHRJ]: Original strategy was used!\n");
-	}
+	// if (fallback == 0 && n_jump_attempt > 0 && nsrv)
+	// {
+	// 	char *org_srv_id = org_srv == NULL ? "UNKNOWN" : org_srv->id;
+	// 	printf("[CHRJ]: Random jump success on %u. attempt, org_srv: %s, nsrv: %s!\n", n_jump_attempt, org_srv_id, nsrv->id);
+	// }
+	// if (fallback == 1)
+	// {
+	// 	printf("[CHRJ]: Original strategy was used!\n");
+	// }
 	return nsrv;
 }
 
