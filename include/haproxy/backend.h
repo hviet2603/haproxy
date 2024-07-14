@@ -148,6 +148,17 @@ void set_backend_down(struct proxy *be);
 
 unsigned int gen_hash(const struct proxy* px, const char* key, unsigned long len);
 
+static inline void fill_hashkey_info(struct hashkey_info *info, const char* key, unsigned long len)
+{
+	info->key = key;
+	info->len = len;
+}
+
+/*
+* CHRJ: Expose the hash function
+*/
+unsigned int gen_hash(const struct proxy* px, const char* key, unsigned long len);
+
 #endif /* _HAPROXY_BACKEND_H */
 
 /*

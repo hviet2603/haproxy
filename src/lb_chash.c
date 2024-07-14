@@ -23,6 +23,8 @@
 #include <haproxy/queue.h>
 #include <haproxy/server-t.h>
 #include <haproxy/tools.h>
+#include <string.h>
+#include <stdio.h>
 
 /* Return next tree node after <node> which must still be in the tree, or be
  * NULL. Lookup wraps around the end to the beginning. If the next node is the
@@ -319,13 +321,37 @@ int chash_server_is_eligible(struct server *s)
  *
  * The lbprm's lock will be used in R/O mode. The server's lock is not used.
  */
-struct server *chash_get_server_hash(struct proxy *p, unsigned int hash, const struct server *avoid)
+#define MAX_JUMP_ATTEMPTS 10
+
+unsigned int chash_random_jump_rehash(struct proxy *p, struct hashkey_info *hash_info, unsigned int n_attempt)
+{
+	if (!hash_info)
+	{
+		printf("[CHRJ]: Hash info is null.\n");
+		exit(1);
+	} else {
+		unsigned long org_keylen = hash_info->len;
+		char mod_key[org_keylen + 5];
+		strncpy(mod_key, hash_info->key, (size_t) org_keylen);
+		memcpy(mod_key + org_keylen, &n_attempt, sizeof(unsigned int));
+		mod_key[org_keylen + 4] = '\0';
+		return gen_hash(p, mod_key, org_keylen + 4);
+	}
+	return 0;
+}
+
+struct server *chash_get_server_hash(struct proxy *p, unsigned int hash, const struct server *avoid, struct hashkey_info *hash_info)
 {
 	struct eb32_node *next, *prev;
 	struct server *nsrv, *psrv;
 	struct eb_root *root;
 	unsigned int dn, dp;
 	int loop;
+	unsigned int n_jump_attempt = 0;
+	unsigned int sel_hash = hash;
+	int fallback = 0;
+	struct server *nsrv_prv = NULL;
+	struct server *org_srv = NULL;
 
 	HA_RWLOCK_RDLOCK(LBPRM_LOCK, &p->lbprm.lock);
 
@@ -341,9 +367,25 @@ struct server *chash_get_server_hash(struct proxy *p, unsigned int hash, const s
 		nsrv = NULL;
 		goto out;
 	}
+	goto chrj_original;
 
+chrj_random_jump:
+	if (n_jump_attempt == MAX_JUMP_ATTEMPTS)
+	{
+		fallback = 1;
+		goto chrj_original;
+	}
+	sel_hash = chash_random_jump_rehash(p, hash_info, n_jump_attempt);
+	next = eb32_lookup_ge(root, sel_hash);
+	goto chrj_look_up;
+
+chrj_original:
 	/* find the node after and the node before */
-	next = eb32_lookup_ge(root, hash);
+	sel_hash = hash;
+	next = eb32_lookup_ge(root, sel_hash);
+
+chrj_look_up:
+	/* find the node after and the node before */
 	if (!next)
 		next = eb32_first(root);
 	if (!next) {
@@ -362,16 +404,33 @@ struct server *chash_get_server_hash(struct proxy *p, unsigned int hash, const s
 	 * compare distances between hash and the two servers
 	 * and select the closest server.
 	 */
-	dp = hash - prev->key;
-	dn = next->key - hash;
+	dp = sel_hash - prev->key;
+	dn = next->key - sel_hash;
 
 	if (dp <= dn) {
 		next = prev;
 		nsrv = psrv;
 	}
 
+	if (n_jump_attempt == 0)
+	{
+		org_srv = nsrv;
+	}
+
+	if (n_jump_attempt != 0 && fallback == 0 && nsrv_prv)
+	{  
+		printf("[CHRJ]: Jump attempt %u, nsrv: %s, nsrv_prv: %s.\n", n_jump_attempt, nsrv->id, nsrv_prv->id);
+	}
+
 	loop = 0;
 	while (nsrv == avoid || (p->lbprm.hash_balance_factor && !chash_server_is_eligible(nsrv))) {
+		if (p->lbprm.hash_balance_factor && !chash_server_is_eligible(nsrv) && n_jump_attempt < MAX_JUMP_ATTEMPTS && hash_info)
+		{
+			printf("[CHRJ]: nsrv: %s is full!\n", nsrv->id);
+			nsrv_prv = nsrv_prv;
+			n_jump_attempt++; 
+			goto chrj_random_jump;
+		}
 		next = eb32_next(next);
 		if (!next) {
 			next = eb32_first(root);
@@ -383,6 +442,15 @@ struct server *chash_get_server_hash(struct proxy *p, unsigned int hash, const s
 
  out:
 	HA_RWLOCK_RDUNLOCK(LBPRM_LOCK, &p->lbprm.lock);
+	if (fallback == 0 && n_jump_attempt > 0 && nsrv)
+	{
+		char *org_srv_id = org_srv == NULL ? "UNKNOWN" : org_srv->id;
+		printf("[CHRJ]: Random jump success on %u. attempt, org_srv: %s, nsrv: %s!\n", n_jump_attempt, org_srv_id, nsrv->id);
+	}
+	if (fallback == 1)
+	{
+		printf("[CHRJ]: Original strategy was used!\n");
+	}
 	return nsrv;
 }
 

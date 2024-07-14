@@ -30,6 +30,11 @@ struct lb_chash {
 	struct eb32_node *last;	/* last node found in case of round robin (or NULL) */
 };
 
+struct hashkey_info {
+	const char *key;
+	unsigned long len;
+};
+
 #endif /* _HAPROXY_LB_CHASH_T_H */
 
 /*

@@ -201,7 +201,7 @@ static struct server *get_server_sh(struct proxy *px, const char *addr, int len,
 		h = full_hash(h);
  hash_done:
 	if ((px->lbprm.algo & BE_LB_LKUP) == BE_LB_LKUP_CHTREE)
-		return chash_get_server_hash(px, h, avoid);
+		return chash_get_server_hash(px, h, avoid, NULL);
 	else
 		return map_get_server_hash(px, h);
 }
@@ -226,6 +226,7 @@ static struct server *get_server_uh(struct proxy *px, char *uri, int uri_len, co
 	int c;
 	int slashes = 0;
 	const char *start, *end;
+	struct hashkey_info hash_info;
 
 	if (px->lbprm.tot_weight == 0)
 		return NULL;
@@ -251,10 +252,11 @@ static struct server *get_server_uh(struct proxy *px, char *uri, int uri_len, co
 	}
 
 	hash = gen_hash(px, start, (end - start));
+	fill_hashkey_info(&hash_info, start, end - start);
 
  hash_done:
 	if ((px->lbprm.algo & BE_LB_LKUP) == BE_LB_LKUP_CHTREE)
-		return chash_get_server_hash(px, hash, avoid);
+		return chash_get_server_hash(px, hash, avoid, &hash_info);
 	else
 		return map_get_server_hash(px, hash);
 }
@@ -275,6 +277,7 @@ static struct server *get_server_ph(struct proxy *px, const char *uri, int uri_l
 	const char *p;
 	const char *params;
 	int plen;
+	struct hashkey_info hash_info;
 
 	/* when tot_weight is 0 then so is srv_count */
 	if (px->lbprm.tot_weight == 0)
@@ -306,9 +309,10 @@ static struct server *get_server_ph(struct proxy *px, const char *uri, int uri_l
 					end++;
 				}
 				hash = gen_hash(px, start, (end - start));
+				fill_hashkey_info(&hash_info, start, end - start);
 
 				if ((px->lbprm.algo & BE_LB_LKUP) == BE_LB_LKUP_CHTREE)
-					return chash_get_server_hash(px, hash, avoid);
+					return chash_get_server_hash(px, hash, avoid, &hash_info);
 				else
 					return map_get_server_hash(px, hash);
 			}
@@ -337,6 +341,7 @@ static struct server *get_server_ph_post(struct stream *s, const struct server *
 	unsigned int     plen = px->lbprm.arg_len;
 	unsigned long    len;
 	const char      *params, *p, *start, *end;
+	struct hashkey_info hash_info;
 
 	if (px->lbprm.tot_weight == 0)
 		return NULL;
@@ -383,9 +388,10 @@ static struct server *get_server_ph_post(struct stream *s, const struct server *
 					/* should we break if vlen exceeds limit? */
 				}
 				hash = gen_hash(px, start, (end - start));
+				fill_hashkey_info(&hash_info, start, end - start);
 
 				if ((px->lbprm.algo & BE_LB_LKUP) == BE_LB_LKUP_CHTREE)
-					return chash_get_server_hash(px, hash, avoid);
+					return chash_get_server_hash(px, hash, avoid, &hash_info);
 				else
 					return map_get_server_hash(px, hash);
 			}
@@ -422,6 +428,7 @@ static struct server *get_server_hh(struct stream *s, const struct server *avoid
 	const char *start, *end;
 	struct htx *htx = htxbuf(&s->req.buf);
 	struct http_hdr_ctx ctx = { .blk = NULL };
+	struct hashkey_info hash_info;
 
 	/* tot_weight appears to mean srv_count */
 	if (px->lbprm.tot_weight == 0)
@@ -475,11 +482,12 @@ static struct server *get_server_hh(struct stream *s, const struct server *avoid
 		}
 		start = p;
 		hash = gen_hash(px, start, (end - start));
+		fill_hashkey_info(&hash_info, start, end - start);
 	}
 
  hash_done:
 	if ((px->lbprm.algo & BE_LB_LKUP) == BE_LB_LKUP_CHTREE)
-		return chash_get_server_hash(px, hash, avoid);
+		return chash_get_server_hash(px, hash, avoid, &hash_info);
 	else
 		return map_get_server_hash(px, hash);
 }
@@ -493,6 +501,7 @@ static struct server *get_server_rch(struct stream *s, const struct server *avoi
 	int              ret;
 	struct sample    smp;
 	int rewind;
+	struct hashkey_info hash_info;
 
 	/* tot_weight appears to mean srv_count */
 	if (px->lbprm.tot_weight == 0)
@@ -519,10 +528,11 @@ static struct server *get_server_rch(struct stream *s, const struct server *avoi
 	 * we will compute the hash based on this value ctx.val.
 	 */
 	hash = gen_hash(px, smp.data.u.str.area, len);
+	fill_hashkey_info(&hash_info, smp.data.u.str.area, len);
 
  hash_done:
 	if ((px->lbprm.algo & BE_LB_LKUP) == BE_LB_LKUP_CHTREE)
-		return chash_get_server_hash(px, hash, avoid);
+		return chash_get_server_hash(px, hash, avoid, &hash_info);
 	else
 		return map_get_server_hash(px, hash);
 }
@@ -535,6 +545,7 @@ static struct server *get_server_expr(struct stream *s, const struct server *avo
 	struct proxy  *px = s->be;
 	struct sample *smp;
 	unsigned int hash = 0;
+	struct hashkey_info hash_info;
 
 	if (px->lbprm.tot_weight == 0)
 		return NULL;
@@ -551,10 +562,11 @@ static struct server *get_server_expr(struct stream *s, const struct server *avo
 	 * options and algorithm.
 	 */
 	hash = gen_hash(px, smp->data.u.str.area, smp->data.u.str.data);
+	fill_hashkey_info(&hash_info, smp->data.u.str.area, smp->data.u.str.data);
 
  hash_done:
 	if ((px->lbprm.algo & BE_LB_LKUP) == BE_LB_LKUP_CHTREE)
-		return chash_get_server_hash(px, hash, avoid);
+		return chash_get_server_hash(px, hash, avoid, &hash_info);
 	else
 		return map_get_server_hash(px, hash);
 }
@@ -575,7 +587,7 @@ static struct server *get_server_rnd(struct stream *s, const struct server *avoi
 	do {
 		prev = curr;
 		hash = statistical_prng();
-		curr = chash_get_server_hash(px, hash, avoid);
+		curr = chash_get_server_hash(px, hash, avoid, NULL);
 		if (!curr)
 			break;
 
