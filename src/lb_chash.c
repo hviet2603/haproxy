@@ -427,7 +427,7 @@ chrj_look_up:
 		if (p->lbprm.hash_balance_factor && !chash_server_is_eligible(nsrv) && n_jump_attempt < MAX_JUMP_ATTEMPTS && hash_info)
 		{
 			//printf("[CHRJ]: nsrv: %s is full!\n", nsrv->id);
-			nsrv_prv = nsrv_prv;
+			nsrv_prv = nsrv;
 			n_jump_attempt++; 
 			goto chrj_random_jump;
 		}
