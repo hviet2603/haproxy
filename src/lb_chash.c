@@ -326,6 +326,7 @@ struct server *chash_get_server_hash(struct proxy *p, unsigned int hash, const s
 	struct eb_root *root;
 	unsigned int dn, dp;
 	int loop;
+	int step;
 
 	HA_RWLOCK_RDLOCK(LBPRM_LOCK, &p->lbprm.lock);
 
@@ -371,8 +372,14 @@ struct server *chash_get_server_hash(struct proxy *p, unsigned int hash, const s
 	}
 
 	loop = 0;
+	step = 1;
 	while (nsrv == avoid || (p->lbprm.hash_balance_factor && !chash_server_is_eligible(nsrv))) {
-		next = eb32_next(next);
+		for (int i = 0; i < step; i++)
+		{
+			next = eb32_next(next);
+			if (!next) 
+				break;
+		}
 		if (!next) {
 			next = eb32_first(root);
 			if (++loop > 1) // protection against accidental loop
